@@ -1,20 +1,24 @@
 import sigpy as sp
 import numpy as np
 import sigpy.mri as mr
-import nft
+from sigpy_e import nft
 
-def jsens_calib(ksp, coord, dcf, ishape, device = sp.Device(-1)):
-    img_s = nft.nufft_adj([ksp],[coord],[dcf],device = device,ishape = ishape,id_channel =True)
-    ksp = sp.fft(input=np.asarray(img_s[0]),axes=(1,2,3))
-    mps = mr.app.JsenseRecon(ksp,
-                             mps_ker_width=12,
-                             ksp_calib_width=32,
-                             lamda=0,
-                             device=device,
-                             comm=sp.Communicator(),
-                             max_iter=10,
-                             max_inner_iter=10).run()
+
+def jsens_calib(ksp, coord, dcf, ishape, device=sp.Device(-1)):
+    img_s = nft.nufft_adj([ksp], [coord], [dcf], device=device, ishape=ishape, id_channel=True)
+    ksp = sp.fft(input=np.asarray(img_s[0]), axes=(1, 2, 3))
+    mps = mr.app.JsenseRecon(
+        ksp,
+        mps_ker_width=12,
+        ksp_calib_width=32,
+        lamda=0,
+        device=device,
+        comm=sp.Communicator(),
+        max_iter=10,
+        max_inner_iter=10,
+    ).run()
     return mps
+
 
 def FD(ishape, axes=None):
     """Linear operator that computes finite difference gradient.
@@ -34,18 +38,19 @@ def FD(ishape, axes=None):
 
     return G
 
-def TVt_prox(X, lamda, iter_max = 10):
-    scale = np.max(np.abs(X))
-    X = X/scale
-    TVt = FD(X.shape,axes=(0,))
+
+def TVt_prox(X, lamda, iter_max=10):
+    xp = sp.get_array_module(X)
+    scale = xp.max(xp.abs(X))
+    X = X / scale
+    TVt = FD(X.shape, axes=(0,))
     X_b = X
-    Y = TVt*X
-    Y = Y/(np.abs(Y)+1e-9)*np.minimum(np.abs(Y)+1e-9,1)
+    Y = TVt * X
+    Y = Y / (xp.abs(Y) + 1e-9) * xp.minimum(xp.abs(Y) + 1e-9, 1)
     for _ in range(iter_max):
-        X_b = X_b - ((X_b-X)+lamda*TVt.H*Y)
-        Y = Y + lamda*TVt*X_b
-        Y = Y/(np.abs(Y)+1e-9)*np.minimum(np.abs(Y)+1e-9,1)
-        
+        X_b = X_b - ((X_b - X) + lamda * TVt.H * Y)
+        Y = Y + lamda * TVt * X_b
+        Y = Y / (xp.abs(Y) + 1e-9) * xp.minimum(xp.abs(Y) + 1e-9, 1)
+
     X_b = X_b * scale
-    return X_b
-    
+    return X_b.astype("complex64")
